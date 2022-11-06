@@ -7,6 +7,24 @@ const int SCREEN_WIDTH = 960;
 const int SCREEN_HEIGHT = 540;
 
 
+//retorna true se tiver o vetor em alguma linha da matriz
+int verifica_repeticao_linha(int matriz[10][3], int vetor[3], int indice_linha){
+	int e_igual = 0;
+	for (int i =0; i<indice_linha; i++){
+		if (matriz[i][0] == vetor[0] && matriz[i][1] == vetor[1] && matriz[i][2] == vetor[2]){
+			e_igual = 1;
+		}
+	}
+	return e_igual;	
+}
+
+//preenche vetor de inteiros de tamanho n com numeros aleatorios
+void vetor_numeros_aleatorios(int *vetor, int n){
+        for (int i =0; i<n; i++){
+        	vetor[i] = rand() % 255;
+        }
+}
+
 int main (int argc, char* args[])
 {
     /* INICIALIZACAO */
@@ -82,11 +100,20 @@ int main (int argc, char* args[])
         	r_fixos[qtd_quad_atual].w= lado_quad;
         	r_fixos[qtd_quad_atual].h= lado_quad;
         	
+        	//cores diferentes sempre
         	srand(time(NULL));
-        	for (int i =0; i<3;i++){
-        		cores_aleatorias[qtd_quad_atual][i] = rand() % 255;
+        	int *num_aleatorios;
+        	num_aleatorios = (int *) malloc(3* sizeof(int));
+        	vetor_numeros_aleatorios(num_aleatorios, 3);
+        	
+        	while(verifica_repeticao_linha(cores_aleatorias, num_aleatorios, qtd_quad_atual)){
+        		vetor_numeros_aleatorios(num_aleatorios, 3);
         	}
         	
+        	for(int i =0; i<3; i++){
+        		cores_aleatorias[qtd_quad_atual][i] = num_aleatorios[i];
+        	}
+        	free(num_aleatorios);
         	qtd_quad_atual+=1;       	
         }
     }
