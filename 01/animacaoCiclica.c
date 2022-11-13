@@ -40,6 +40,7 @@ int main (int argc, char* args[])
 	   
     int quit = 0;
     SDL_Event e;
+    int espera = 500;
     
     //direcao dos objetos
     int delta_r[3][2];
@@ -49,27 +50,46 @@ int main (int argc, char* args[])
     	delta_r[i][1] = 1;
     }
     
-    while (!quit){
-        while (SDL_PollEvent(&e)){
-            if(e.type == SDL_QUIT)
-                quit = 1;
+    while (!quit){ 
+		SDL_SetRenderDrawColor(ren, 0x00, 0x00, 0x00, 0x00);
+		SDL_RenderClear(ren);
+		SDL_SetRenderDrawColor(ren, 0x87, 0xce, 0xfa, 0x00);
+		SDL_RenderFillRect(ren, &r1);
+		SDL_SetRenderDrawColor(ren, 0xf5, 0xde, 0xb3, 0x00);
+		SDL_RenderFillRect(ren, &r2);
+		SDL_SetRenderDrawColor(ren, 0xc8, 0xa2, 0xc8, 0x00);
+		SDL_RenderFillRect(ren, &r3);
+		
+		//escutando evento
+		int isevt = SDL_WaitEventTimeout(&e, espera);
+		if (isevt) {
+            if (e.type == SDL_QUIT) {
+            	quit = 1;
+            }else if (e.type == SDL_KEYDOWN) {
+                switch (e.key.keysym.sym) {
+                    case SDLK_UP:
+                        r1.y -= 5;
+                        break;
+                    case SDLK_DOWN:
+                        r1.y += 5;
+                        break;
+                    case SDLK_LEFT:
+                        r1.x -= 5;
+                        break;
+                    case SDLK_RIGHT:
+                        r1.x += 5;
+                        break;
+                }
+        	}
+        } else {
+        	//refefine o tempo de espera e mexe linearmente os quadrados
+            define_comportamento(&r1, delta_r, 0);
+			define_comportamento(&r2, delta_r, 1);
+			define_comportamento(&r3, delta_r, 2);
+			SDL_Delay(200);
         }
-	//desenhando os quadrados 
-	SDL_SetRenderDrawColor(ren, 0x00, 0x00, 0x00, 0x00);
-	SDL_RenderClear(ren);
-	SDL_SetRenderDrawColor(ren, 0x87, 0xce, 0xfa, 0x00);
-	SDL_RenderFillRect(ren, &r1);
-	SDL_SetRenderDrawColor(ren, 0xf5, 0xde, 0xb3, 0x00);
-	SDL_RenderFillRect(ren, &r2);
-	SDL_SetRenderDrawColor(ren, 0xc8, 0xa2, 0xc8, 0x00);
-	SDL_RenderFillRect(ren, &r3);
-	
-	//mudando as trajetorias
-	define_comportamento(&r1, delta_r, 0);
-	define_comportamento(&r2, delta_r, 1);
-	define_comportamento(&r3, delta_r, 2);
-	SDL_Delay(200);
-	SDL_RenderPresent(ren);
+
+		SDL_RenderPresent(ren);
     }
 	
     /* FINALIZACAO */
