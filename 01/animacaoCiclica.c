@@ -44,7 +44,6 @@ int main (int argc, char* args[])
     
     //direcao dos objetos
     int delta_r[3][2];
-    
     for(int i =0; i<3; i++){
     	delta_r[i][0] = 1;
     	delta_r[i][1] = 1;
@@ -88,7 +87,6 @@ int main (int argc, char* args[])
 			define_comportamento(&r3, delta_r, 2);
 			SDL_Delay(200);
         }
-
 		SDL_RenderPresent(ren);
     }
 	
