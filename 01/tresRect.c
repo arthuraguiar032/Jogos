@@ -55,31 +55,38 @@ int main (int argc, char* args[])
         int isevt = aux_WaitEventTimeoutCount(&evt, &espera);
         
         if (isevt) {
-            if (evt.type == SDL_QUIT) {
-            	quit = 1;
-            }else if (evt.type == SDL_KEYDOWN) {
-                switch (evt.key.keysym.sym) {
-                    case SDLK_UP:
-                        r_teclado.y -= 5;
-                        break;
-                    case SDLK_DOWN:
-                        r_teclado.y += 5;
-                        break;
-                    case SDLK_LEFT:
-                        r_teclado.x -= 5;
-                        break;
-                    case SDLK_RIGHT:
-                        r_teclado.x += 5;
-                        break;
-                }
-            }else if (evt.type == SDL_MOUSEMOTION) {
-            	int x,y;
-            	SDL_GetMouseState(&x, &y);
-            	r_mouse.x = x;
-            	r_mouse.y = y;
+        	int x,y;
+            switch (evt.type){
+            	case SDL_QUIT:
+            		quit = 1;
+            		break;
+            	
+            	case SDL_MOUSEMOTION:
+            		//int x,y;
+            		SDL_GetMouseState(&x, &y);
+            		r_mouse.x = x;
+            		r_mouse.y = y;
+            		break;
+            		
+            	case SDL_KEYDOWN:
+            		switch (evt.key.keysym.sym){
+            			case SDLK_UP:
+                       		r_teclado.y -= 5;
+                        	break;
+                    	case SDLK_DOWN:
+                        	r_teclado.y += 5;
+                        	break;
+                   		case SDLK_LEFT:
+                        	r_teclado.x -= 5;
+                        	break;
+                    	case SDLK_RIGHT:
+                        	r_teclado.x += 5;
+                        	break;
+            		}
+            		break;
             }
         } else {
-        	//refefine o tempo de espera
+        //refefine o tempo de espera
             espera = espera_inicial;
             r_tempo.x += 2;
             r_tempo.y += 2;
