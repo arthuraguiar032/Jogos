@@ -75,21 +75,21 @@ int main (int argc, char* args[])
                 			if (mov_futuro >=0)
                 				r.y = mov_futuro;
                     			break;
-                	case SDLK_DOWN:
-                    		mov_futuro = r.y + qtd_movimento;
-                    		if(mov_futuro<=SCREEN_HEIGHT-lado_quad)
-                			r.y = mov_futuro;
-                    		break;
-                	case SDLK_LEFT:
-                    		mov_futuro = r.x - qtd_movimento;
-                    		if(mov_futuro>=0)
-                    			r.x = mov_futuro;
-                    		break;
-                	case SDLK_RIGHT:
-                		mov_futuro = r.x + qtd_movimento;
-                			if(mov_futuro<=SCREEN_WIDTH - lado_quad)
+                		case SDLK_DOWN:
+                    			mov_futuro = r.y + qtd_movimento;
+                    			if(mov_futuro<=SCREEN_HEIGHT-lado_quad)
+                				r.y = mov_futuro;
+                    			break;
+                		case SDLK_LEFT:
+                    			mov_futuro = r.x - qtd_movimento;
+                    			if(mov_futuro>=0)
                     				r.x = mov_futuro;
-                    		break;
+                    			break;
+                		case SDLK_RIGHT:
+                			mov_futuro = r.x + qtd_movimento;
+                				if(mov_futuro<=SCREEN_WIDTH - lado_quad)
+                    					r.x = mov_futuro;
+                    			break;
             		}
 			break;
 
