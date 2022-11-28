@@ -15,14 +15,26 @@ typedef struct{
 	SDL_Color cor;
 }Line;
 
-void rects_cores_aleatorias(Rect *retangulos, int n){
+void rects_inicioCorrida(Rect *retangulos, int qtd, int x_inicial){
+	for(int i=0; i<qtd; i++){
+		//retangulos[i].fisico.h = retangulos[i].fisico.w = 20;	
+		retangulos[i].fisico.x = x_inicial;
+		//retangulos[i].fisico.y = 20*(1+i*1.5);		
+	}
+}
+
+void rects_cores_aleatorias(Rect *retangulos, int qtd){
 	srand(time(NULL));	
-	for(int i =0; i<n; i++){
+	for(int i =0; i<qtd; i++){
 		retangulos[i].cor.r = rand() % 255;
 		retangulos[i].cor.g = rand() % 255;
 		retangulos[i].cor.b = rand() % 255;
-		retangulos[i].cor.a = rand() % 255;
+		retangulos[i].cor.a = 1;
 	}
+}
+
+Uint32 colourToUint(SDL_Color cor){
+	return (Uint32)((cor.r << 16) + (cor.g << 8) + (cor.b << 0));
 }
 
 int main (int argc, char* args[])
@@ -38,38 +50,47 @@ int main (int argc, char* args[])
 
     /* EXECUÇÃO */
 	int quit = 0;
+	SDL_Color white = {255, 255, 255, 1};
+	SDL_Color black = {0, 0, 0, 1};
 
 	int qtd_corredores = 3;	
 	Rect retangulos[qtd_corredores];
 	
 	rects_cores_aleatorias(retangulos, qtd_corredores);
+	rects_inicioCorrida(retangulos, qtd_corredores, 50);
 	for(int i=0; i<qtd_corredores; i++){
 		retangulos[i].fisico.h = retangulos[i].fisico.w = 20;	
-		retangulos[i].fisico.x = 50;
-		retangulos[i].fisico.y = 20*(1+i);			
+		//retangulos[i].fisico.x = 50;
+		retangulos[i].fisico.y = 20*(1+i*1.5);		
 	}
 	
-	Line linha_chegada;
 	int tam_linha = 200;
-	linha_chegada.inicial.x = linha_chegada.final.x = 900;
+	Line linha_chegada;
+	linha_chegada.cor = white;
+	linha_chegada.inicial.x = linha_chegada.final.x = 700;
 	linha_chegada.inicial.y = 10;
 	linha_chegada.final.y = 10 + tam_linha;
-
+	
+	
+	int primeiro = -1;
     while (!quit) {
-		//desenhando os quadrados
 		SDL_SetRenderDrawColor(ren, 0x00,0x00,0x00,0x00);
         SDL_RenderClear(ren);
+		
+		//desenhando a linha de chegada
+        SDL_Rect quadrado_chegada = {700, 10, 25, 200}; 
+        SDL_SetRenderDrawColor(ren, white.r, white.g, white.b, white.a);
+		SDL_RenderFillRect(ren, &quadrado_chegada);
+		
+		//desenhando os quadrados
 		for(int i=0; i<qtd_corredores; i++){
 			SDL_SetRenderDrawColor(ren, retangulos[i].cor.r, retangulos[i].cor.g, retangulos[i].cor.b, retangulos[i].cor.a);
 			SDL_RenderFillRect(ren, &retangulos[i].fisico);
 		}
-		//desenhando a linha de chegada
-		SDL_SetRenderDrawColor(ren, linha_chegada.cor.r, linha_chegada.cor.g, linha_chegada.cor.b, linha_chegada.cor.a);		
-		SDL_RenderDrawLine(ren, linha_chegada.inicial.x, linha_chegada.inicial.y, linha_chegada.final.x, linha_chegada.final.y);		
-        SDL_RenderPresent(ren);
+		SDL_RenderPresent(ren);
 
         SDL_Event evt;
-        int isevt = SDL_WaitEventTimeout(&evt, 50);
+        int isevt = SDL_WaitEventTimeout(&evt, 25);
         if (isevt) {
             if (evt.type == SDL_QUIT) {
             	quit = 1;
@@ -77,9 +98,26 @@ int main (int argc, char* args[])
         } else {
 			srand(time(NULL));
             for(int i=0; i<qtd_corredores; i++){
-				retangulos[i].fisico.x += rand() % 10;
+				if(!SDL_HasIntersection(&quadrado_chegada, &retangulos[i].fisico)){
+					retangulos[i].fisico.x += rand() % 5 + 1;
+					SDL_SetRenderDrawColor(ren, retangulos[i].cor.r, retangulos[i].cor.g, retangulos[i].cor.b, retangulos[i].cor.a);
+					SDL_RenderFillRect(ren, &retangulos[i].fisico);
+					SDL_Delay(5);
+				}else{
+					if(primeiro==-1){
+						primeiro = i;
+					}
+				}
 			}
         }
+        //anunciar vencedor e resetar programa
+        if(SDL_HasIntersection(&quadrado_chegada, &retangulos[0].fisico) && SDL_HasIntersection(&quadrado_chegada, &retangulos[1].fisico) &&
+			 SDL_HasIntersection(&quadrado_chegada, &retangulos[2].fisico)){
+			 	SDL_Delay(50);
+			 	printf("%d\n", primeiro);
+				rects_inicioCorrida(retangulos, qtd_corredores, 50);
+				primeiro = -1;
+		}
     }
 
     /* FINALIZACAO */
