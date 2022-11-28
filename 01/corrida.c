@@ -9,17 +9,13 @@
 typedef struct{
 	SDL_Rect fisico;
 	SDL_Color cor;
+	int terminouCorrida;
 }Rect;
-
-typedef struct{
-	SDL_Point inicial;
-	SDL_Point final;
-	SDL_Color cor;
-}Line;
 
 typedef struct{
 	int qtd_corredores;
 	int largada;
+	int chegada;
 	int vencedor;
 }Race;
 
@@ -50,7 +46,8 @@ SDL_Renderer* SDL_criaRenderer(SDL_Window* win){
 
 void inicioCorrida(Rect *retangulos, Race *corrida){
 	for(int i=0; i<corrida->qtd_corredores; i++){	
-		retangulos[i].fisico.x = corrida->largada;		
+		retangulos[i].fisico.x = corrida->largada;
+		retangulos[i].terminouCorrida = 0;		
 	}
 	corrida->vencedor = -1;
 }
@@ -66,8 +63,7 @@ void rects_coresAleatorias(Rect *retangulos, int qtd){
 }
 
 
-int main (int argc, char* args[])
-{
+int main (int argc, char* args[]) {
     /* INICIALIZACAO */
     SDL_inicia();
     SDL_Window* win = SDL_criaJanela("1.6.1: Corrida");
@@ -77,6 +73,7 @@ int main (int argc, char* args[])
 	Race corrida;
 	corrida.qtd_corredores = 3;
 	corrida.largada = 50;
+	corrida.chegada = 700;
 		
 	Rect retangulos[corrida.qtd_corredores];
 	rects_coresAleatorias(retangulos, corrida.qtd_corredores);
@@ -96,7 +93,7 @@ int main (int argc, char* args[])
         SDL_RenderClear(ren);
 		
 		//desenhando a linha de chegada
-        SDL_Rect quadrado_chegada = {700, 10, 25, 200}; 
+        SDL_Rect quadrado_chegada = {corrida.chegada, 10, 25, 200}; 
         SDL_SetRenderDrawColor(ren, white.r, white.g, white.b, white.a);
 		SDL_RenderFillRect(ren, &quadrado_chegada);
 		
@@ -110,29 +107,81 @@ int main (int argc, char* args[])
         SDL_Event evt;
         int isevt = SDL_WaitEventTimeout(&evt, 25);
         if (isevt) {
-            if (evt.type == SDL_QUIT) {
-            	quit = 1;
+        	int qtd_movimento = 4;		
+			int mov_futuro = 0;
+            switch(evt.type){
+            	case SDL_QUIT:
+            		quit = 1;
+            		break;
+            	case SDL_MOUSEMOTION:
+            		if(!retangulos[0].terminouCorrida){
+            			int x, y;
+            			SDL_GetMouseState(&x, &y);
+            			if(x<corrida.largada){
+            				retangulos[0].fisico.x = corrida.largada;
+            			}else if(x>=corrida.chegada){
+            				retangulos[0].fisico.x = corrida.chegada;
+            				//retangulos[0].terminouCorrida = 1;
+            			}else{
+            				retangulos[0].fisico.x = x;
+            			}
+            		}
+            		break;
+            		
+            	case SDL_KEYDOWN:
+            		switch(evt.key.keysym.sym){
+            			case SDLK_LEFT:
+            				if(!retangulos[1].terminouCorrida){
+            					mov_futuro = retangulos[1].fisico.x - qtd_movimento;
+            					if (mov_futuro<=corrida.largada){
+            						retangulos[1].fisico.x = corrida.largada;
+            					}else{
+            						retangulos[1].fisico.x = mov_futuro;
+            					}
+            				}
+            				break;
+            				
+            			case SDLK_RIGHT:
+            				if(!retangulos[1].terminouCorrida){
+            					mov_futuro = retangulos[1].fisico.x + qtd_movimento;
+            					if (mov_futuro>=corrida.chegada){
+            						retangulos[1].fisico.x = corrida.chegada;
+            					}else{
+            						retangulos[1].fisico.x = mov_futuro;
+            					}	
+            				}
+            				break;
+            		}
+            		break;
             }
         } else {
 			srand(time(NULL));
-            for(int i=0; i<corrida.qtd_corredores; i++){
-				if(!SDL_HasIntersection(&quadrado_chegada, &retangulos[i].fisico)){
-					retangulos[i].fisico.x += rand() % 5 + 1;
-					SDL_SetRenderDrawColor(ren, retangulos[i].cor.r, retangulos[i].cor.g, retangulos[i].cor.b, retangulos[i].cor.a);
-					SDL_RenderFillRect(ren, &retangulos[i].fisico);
-					SDL_Delay(5);
-				}else{
-					if(corrida.vencedor==-1){
-						corrida.vencedor = i;
-					}
-				}
-			}
+            int aux = rand() %7 + 1;
+            if (retangulos[2].fisico.x + aux >=corrida.chegada){
+            	retangulos[2].fisico.x = corrida.chegada;
+            }else{
+            	retangulos[2].fisico.x += aux;
+            }	
         }
+        //verificando se cada quadrado terminou a corrida
+        for(int i=0; i<corrida.qtd_corredores; i++){
+        	if (SDL_HasIntersection(&quadrado_chegada, &retangulos[i].fisico)){
+        		retangulos[i].terminouCorrida = 1;
+        		if (corrida.vencedor == -1){
+        			corrida.vencedor = i;
+        		}
+        	}
+        	
+        	SDL_SetRenderDrawColor(ren, retangulos[i].cor.r, retangulos[i].cor.g, retangulos[i].cor.b, retangulos[i].cor.a);
+			SDL_RenderFillRect(ren, &retangulos[i].fisico);
+			SDL_Delay(5);
+        }
+        
         //anunciar vencedor e resetar programa
         if(SDL_HasIntersection(&quadrado_chegada, &retangulos[0].fisico) && SDL_HasIntersection(&quadrado_chegada, &retangulos[1].fisico) &&
 			 SDL_HasIntersection(&quadrado_chegada, &retangulos[2].fisico)){
-			 	SDL_Delay(50);
 			 	printf("%d\n", corrida.vencedor);
+			 	SDL_Delay(10);
 				inicioCorrida(retangulos, &corrida);
 		}
     }
