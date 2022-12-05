@@ -2,9 +2,10 @@
 #include <time.h>
 
 #define SCREEN_WIDTH 780
-#define  SCREEN_HEIGHT 350
+#define SCREEN_HEIGHT 350
 #define WINDOW_POS_X  SDL_WINDOWPOS_UNDEFINED
 #define WINDOW_POS_Y  SDL_WINDOWPOS_UNDEFINED
+#define TIMEOUT 25
 
 typedef struct{
 	SDL_Rect fisico;
@@ -15,10 +16,11 @@ typedef struct{
 typedef struct{
 	int qtd_corredores;
 	int largada;
-	int chegada;
+	SDL_Rect chegada;
 	int podio[4];
 	int posicao_proximo;
 }Race;
+
 
 void SDL_inicia(){
 	if (SDL_Init(SDL_INIT_EVERYTHING))
@@ -39,17 +41,18 @@ SDL_Window* SDL_criaJanela(char titulo[]){
 
 SDL_Renderer* SDL_criaRenderer(SDL_Window* win){
 	SDL_Renderer* ren = SDL_CreateRenderer(win, -1, 0);
-	
 	if (ren==NULL)
 		printf("Erro na criação do Renderizador.\nErro SDL: %s", SDL_GetError());
 	return ren;
 }
 
 void corrida_inicio(Rect *retangulos, Race *corrida){
+	int anterior = 30;
 	for(int i=0; i<corrida->qtd_corredores; i++){	
 		retangulos[i].fisico.x = corrida->largada;
 		retangulos[i].terminouCorrida = 0;
-		retangulos[i].fisico.y = 20*(1+i*1.5);
+		retangulos[i].fisico.y = anterior+30;
+		anterior = retangulos[i].fisico.y;
 	}
 	for(int i=0; i<= corrida->qtd_corredores; i++){
 		corrida->podio[i] = -1;
@@ -59,7 +62,6 @@ void corrida_inicio(Rect *retangulos, Race *corrida){
 
 void corrida_preenchePodio(Race *corrida, int corredor){
 	int i = corrida->posicao_proximo;
-	//verifica se o corredor ja esta no podio
 	for (int i = 1; i <= corrida->qtd_corredores; ++i){
 		if(corredor==corrida->podio[i]){
 			return;
@@ -67,6 +69,26 @@ void corrida_preenchePodio(Race *corrida, int corredor){
 	}
 	corrida->podio[i] = corredor;
 	corrida->posicao_proximo++;
+}
+
+void corrida_desenha(Race *corrida, SDL_Renderer *ren){
+		SDL_SetRenderDrawColor(ren, 1, 42, 0, 1);
+        SDL_RenderClear(ren);
+		SDL_Rect pista = {0, 40, SCREEN_WIDTH, 130};
+		SDL_SetRenderDrawColor(ren, 0, 0, 0, 1);
+		SDL_RenderFillRect(ren, &pista);
+		//linha de chegada
+        SDL_SetRenderDrawColor(ren, 255, 255, 255, 1);
+		SDL_RenderFillRect(ren, &corrida->chegada);
+		SDL_RenderPresent(ren);
+}
+
+void rects_desenha(Rect *retangulos, int qtd, SDL_Renderer *ren){
+	for(int i=0; i<qtd; i++){
+		SDL_SetRenderDrawColor(ren, retangulos[i].cor.r, retangulos[i].cor.g, retangulos[i].cor.b, retangulos[i].cor.a);
+		SDL_RenderFillRect(ren, &retangulos[i].fisico);
+	}
+	SDL_RenderPresent(ren);
 }
 
 void rects_coresAleatorias(Rect *retangulos, int qtd){
@@ -79,51 +101,92 @@ void rects_coresAleatorias(Rect *retangulos, int qtd){
 	}
 }
 
+int aux_WaitEventTimeoutCount(SDL_Event* evt, Uint32* ms){
+	int antes = SDL_GetTicks();
+	int is_evt = SDL_WaitEventTimeout(evt, *ms);
+	int d_tempo = SDL_GetTicks() - antes;
+	if (is_evt){
+		//protecao para caso haja algum ruido na contagem de tempo
+		if(d_tempo>*ms){
+			d_tempo = 0;
+		}
+		*ms -= d_tempo;
+	}	
+	return is_evt;
+}
 
 int main (int argc, char* args[]) {
     /* INICIALIZACAO */
     SDL_inicia();
     SDL_Window* win = SDL_criaJanela("1.6.1: Corrida");
     SDL_Renderer* ren = SDL_CreateRenderer(win, -1, 0);
-
     /* EXECUÇÃO */
 	Race corrida;
 	corrida.qtd_corredores = 3;
 	corrida.largada = 50;
-	corrida.chegada = 700;
-		
+	corrida.chegada = (SDL_Rect){730, 40, 80, 130};
+	
 	Rect retangulos[corrida.qtd_corredores];
 	rects_coresAleatorias(retangulos, corrida.qtd_corredores);
 	for(int i=0; i<corrida.qtd_corredores; i++){
 		retangulos[i].fisico.h = retangulos[i].fisico.w = 20;			
 	}
-	
-	corrida_inicio(retangulos, &corrida);
-	int quit = 0;
-	
-    while (!quit) {
-    	SDL_Color white = {255, 255, 255, 1};
-		SDL_Color black = {0, 0, 0, 1};
-		
-		SDL_SetRenderDrawColor(ren, black.r, black.g, black.b, black.a);
-        SDL_RenderClear(ren);
-		
-		//desenhando a linha de chegada
-        SDL_Rect quadrado_chegada = {corrida.chegada, 10, 30, 200}; 
-        SDL_SetRenderDrawColor(ren, white.r, white.g, white.b, white.a);
-		SDL_RenderFillRect(ren, &quadrado_chegada);
-		
-		//desenhando os quadrados
-		for(int i=0; i<corrida.qtd_corredores; i++){
-			SDL_SetRenderDrawColor(ren, retangulos[i].cor.r, retangulos[i].cor.g, retangulos[i].cor.b, retangulos[i].cor.a);
-			SDL_RenderFillRect(ren, &retangulos[i].fisico);
-		}
-		SDL_RenderPresent(ren);
 
+	corrida_inicio(retangulos, &corrida);
+	corrida_desenha(&corrida, ren);
+	rects_desenha(retangulos, corrida.qtd_corredores, ren);
+	int quit = 0;
+    
+	while(!quit){
+		//verifica se possui vencedores
+		int todos_terminaram=1;
+		for(int i=0; i<corrida.qtd_corredores; i++){
+        	if (SDL_HasIntersection(&corrida.chegada, &retangulos[i].fisico)){
+        		retangulos[i].terminouCorrida = 1;
+        		corrida_preenchePodio(&corrida, i);
+        	}else{
+        		todos_terminaram=0;
+        	}
+        }
+        //mostrar podio
+        if(todos_terminaram==1){
+        	SDL_Color gold = {255, 215, 0, 1};
+			SDL_Color silver = {169, 169, 169, 1};
+			SDL_Color bronze = {205, 127, 50, 1};
+				
+			int largura_podio = 40;
+			SDL_Rect quadrados_podio[3];
+			quadrados_podio[0] = (SDL_Rect){SCREEN_WIDTH/2 - largura_podio/2, 250, largura_podio, 50};
+			quadrados_podio[1] = (SDL_Rect){quadrados_podio[0].x - largura_podio, 275, largura_podio, 25};
+			quadrados_podio[2] = (SDL_Rect){quadrados_podio[0].x + largura_podio, 285, largura_podio, 15};
+			SDL_Rect retangulos_copia[corrida.qtd_corredores];
+			for(int i=0; i<corrida.qtd_corredores; i++){
+				retangulos_copia[i].w = retangulos_copia[i].h = 20;
+			}
+							
+			SDL_SetRenderDrawColor(ren, gold.r, gold.g, gold.b, gold.a);
+			SDL_RenderFillRect(ren, &quadrados_podio[0]);
+			SDL_SetRenderDrawColor(ren, silver.r, silver.g, silver.b, silver.a);
+			SDL_RenderFillRect(ren, &quadrados_podio[1]);
+			SDL_SetRenderDrawColor(ren, bronze.r, bronze.g, bronze.b, bronze.a);
+			SDL_RenderFillRect(ren, &quadrados_podio[2]);
+			SDL_RenderPresent(ren);
+
+			for (int i = 1; i <=corrida.qtd_corredores; i++){
+				int aux = corrida.podio[i];
+				retangulos_copia[aux].x = quadrados_podio[i-1].x + retangulos[aux].fisico.w/2;
+				retangulos_copia[aux].y = quadrados_podio[i-1].y - retangulos[aux].fisico.w -2;
+				SDL_SetRenderDrawColor(ren, retangulos[aux].cor.r, retangulos[aux].cor.g, retangulos[aux].cor.b, retangulos[aux].cor.a);
+				SDL_RenderFillRect(ren, &retangulos_copia[aux]);
+			}
+			SDL_RenderPresent(ren);
+        }
+        //capturando os eventos
         SDL_Event evt;
-        int isevt = SDL_WaitEventTimeout(&evt, 25);
+        Uint32 tempo_espera = TIMEOUT;
+        int isevt = aux_WaitEventTimeoutCount(&evt, &tempo_espera);
         if (isevt) {
-        	int qtd_movimento = 4;		
+        	int qtd_movimento = 6;		
 			int mov_futuro = 0;
             switch(evt.type){
             	case SDL_QUIT:
@@ -136,11 +199,17 @@ int main (int argc, char* args[]) {
             			SDL_GetMouseState(&x, &y);
             			if(x<corrida.largada){
             				retangulos[0].fisico.x = corrida.largada;
-            			}else if(x>=corrida.chegada){
-            				retangulos[0].fisico.x = corrida.chegada;
+            			}else if(x>=corrida.chegada.x){
+            				retangulos[0].fisico.x = corrida.chegada.x;
             			}else{
             				retangulos[0].fisico.x = x;
             			}
+            		}
+            		break;
+            	//reiniciar corrida
+            	case SDL_MOUSEBUTTONDOWN:
+            		if(todos_terminaram==1){
+            			corrida_inicio(retangulos, &corrida);
             		}
             		break;
 				//retangulo movido pelo teclado
@@ -158,8 +227,8 @@ int main (int argc, char* args[]) {
             				
             				case SDLK_RIGHT:
             						mov_futuro = retangulos[1].fisico.x + qtd_movimento;
-            						if (mov_futuro>=corrida.chegada){
-            							retangulos[1].fisico.x = corrida.chegada;
+            						if (mov_futuro>=corrida.chegada.x){
+            							retangulos[1].fisico.x = corrida.chegada.x;
             						}else{
             							retangulos[1].fisico.x = mov_futuro;
             						}	
@@ -175,52 +244,13 @@ int main (int argc, char* args[]) {
             	int aux = rand() %7 + 1;
 				retangulos[2].fisico.x += aux;
 			}
+			tempo_espera = TIMEOUT;
         }
-        //verificando se cada quadrado terminou a corrida
-        for(int i=0; i<corrida.qtd_corredores; i++){
-        	if (SDL_HasIntersection(&quadrado_chegada, &retangulos[i].fisico)){
-        		retangulos[i].terminouCorrida = 1;
-        		corrida_preenchePodio(&corrida, i);
-        	}
+        if(!todos_terminaram){
+        	corrida_desenha(&corrida, ren);
+			rects_desenha(retangulos, corrida.qtd_corredores, ren);	
         }
-        //anunciar vencedor e resetar programa
-        if(SDL_HasIntersection(&quadrado_chegada, &retangulos[0].fisico) && SDL_HasIntersection(&quadrado_chegada, &retangulos[1].fisico) &&
-			 SDL_HasIntersection(&quadrado_chegada, &retangulos[2].fisico)){
-				SDL_Color gold = {255, 215, 0, 1};
-				SDL_Color silver = {169, 169, 169, 1};
-				SDL_Color bronze = {205, 127, 50, 1};
-				SDL_Color cor_podio = {173, 216, 230, 1};
-				
-				int largura_podio = 40;
-				SDL_Rect quadrados_podio[3];
-				quadrados_podio[0] = (SDL_Rect){SCREEN_WIDTH/2 - largura_podio/2, 250, largura_podio, 50};
-				quadrados_podio[1] = (SDL_Rect){quadrados_podio[0].x - largura_podio, 275, largura_podio, 25};
-				quadrados_podio[2] = (SDL_Rect){quadrados_podio[0].x + largura_podio, 285, largura_podio, 15};
-								
-				SDL_SetRenderDrawColor(ren, gold.r, gold.g, gold.b, gold.a);
-				SDL_RenderFillRect(ren, &quadrados_podio[0]);
-				SDL_SetRenderDrawColor(ren, silver.r, silver.g, silver.b, silver.a);
-				SDL_RenderFillRect(ren, &quadrados_podio[1]);
-				SDL_SetRenderDrawColor(ren, bronze.r, bronze.g, bronze.b, bronze.a);
-				SDL_RenderFillRect(ren, &quadrados_podio[2]);
-				SDL_RenderPresent(ren);
-				SDL_Delay(2000);
-
-				//mostrar podio
-				for (int i = 1; i <=corrida.qtd_corredores; i++){
-					int aux = corrida.podio[i];
-					retangulos[aux].fisico.x = quadrados_podio[i-1].x + retangulos[aux].fisico.w/2;
-					retangulos[aux].fisico.y = quadrados_podio[i-1].y - retangulos[aux].fisico.w -2;
-					SDL_SetRenderDrawColor(ren, retangulos[aux].cor.r, retangulos[aux].cor.g, retangulos[aux].cor.b, retangulos[aux].cor.a);
-					SDL_RenderFillRect(ren, &retangulos[aux].fisico);
-				}
-
-				SDL_RenderPresent(ren);
-
-			 	SDL_Delay(5000);
-				corrida_inicio(retangulos, &corrida);
-		}
-    }
+	}
     /* FINALIZACAO */
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
