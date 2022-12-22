@@ -1,97 +1,89 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <assert.h>
 
-const int SCREEN_WIDTH = 960;
-const int SCREEN_HEIGHT = 540;
-const int TAM_RECT = 30;
+#define SCREEN_WIDTH 960
+#define SCREEN_HEIGHT 540
+#define TIMEOUT 35
 
-//comportamentos dos objetos ao bater nas quinas e nas bordas
-void define_comportamento(SDL_Rect *r, int matriz[3][2], int linha){
-	//se o objeto bater em uma barreira, inverto a direção
-	if( (r->x==0 && r->y==0) || (r->x==SCREEN_WIDTH-TAM_RECT  && r->y==0) || (r->x==SCREEN_WIDTH-TAM_RECT && r->y==SCREEN_HEIGHT-TAM_RECT) || (r->x==0 && r->y==SCREEN_HEIGHT-TAM_RECT)){
-		matriz[linha][0] *= -1;
-		matriz[linha][1] *= -1;
-		r->x +=1;
-	} else if(r->x<=0 || r->x>=SCREEN_WIDTH-TAM_RECT){
-		matriz[linha][0] *= -1;
-	} else if(r->y<=0 || r->y>=SCREEN_HEIGHT-TAM_RECT){
-		matriz[linha][1] *= -1;
-	}
-	int vel = 2;
-	r->x += vel*matriz[linha][0];
-	r->y += vel*matriz[linha][1];
+void SDL_inicia(){
+	if (SDL_Init(SDL_INIT_EVERYTHING))
+		printf("Erro de inicialização no SDL.\nErro SDL: %s", SDL_GetError());
+	return;
 }
 
-
-int main (int argc, char* args[])
-{
-    /* INICIALIZACAO */
-    SDL_Init(SDL_INIT_EVERYTHING);
-    SDL_Window* win = SDL_CreateWindow("Imagem Animada",
+SDL_Window* SDL_criaJanela(char titulo[]){
+	SDL_Window* win = SDL_CreateWindow(titulo,
                          SDL_WINDOWPOS_UNDEFINED,
                          SDL_WINDOWPOS_UNDEFINED,
                          SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN
                       );
-    SDL_Renderer* ren = SDL_CreateRenderer(win, -1, 0);
+	if (win==NULL)
+		printf("Erro na criação da Janela.\nErro SDL: %s", SDL_GetError());
+	return win;
+}
 
-    /* EXECUÇÃO */
-    SDL_Rect r1 = { 1, 1, TAM_RECT, TAM_RECT};
-    SDL_Rect r2 = { SCREEN_WIDTH-TAM_RECT-8, SCREEN_HEIGHT-TAM_RECT-8, TAM_RECT, TAM_RECT};
-    SDL_Rect r3 = { 20, 500, TAM_RECT, TAM_RECT};
-	   
+SDL_Renderer* SDL_criaRenderer(SDL_Window* win){
+	SDL_Renderer* ren = SDL_CreateRenderer(win, -1, 0);
+	if (ren==NULL)
+		printf("Erro na criação do Renderizador.\nErro SDL: %s", SDL_GetError());
+	return ren;
+}
+
+int aux_WaitEventTimeoutCount(SDL_Event* evt, Uint32* ms){
+	int antes = SDL_GetTicks();
+	int is_evt = SDL_WaitEventTimeout(evt, *ms);
+	int d_tempo = SDL_GetTicks() - antes;
+	if (is_evt){
+		//protecao para caso haja algum ruido na contagem de tempo
+		if(d_tempo>*ms){
+			d_tempo = 0;
+		}
+		*ms -= d_tempo;
+	}	
+	return is_evt;
+}
+
+int main (int argc, char* args[]) {
+    /* INICIALIZACAO */
+	SDL_inicia();
+    SDL_Window* win = SDL_criaJanela("1.7: Imagem animada");
+    SDL_Renderer* ren = SDL_CreateRenderer(win, -1, 0);
+    SDL_Texture* img = IMG_LoadTexture(ren, "sprite-sheet-bird.png");
+    assert(img != NULL);
+
+    /* EXECUCAO */
     int quit = 0;
-    SDL_Event e;
-    int espera = 500;
-    
-    //direcao dos objetos
-    int delta_r[3][2];
-    for(int i =0; i<3; i++){
-    	delta_r[i][0] = 1;
-    	delta_r[i][1] = 1;
+    Uint32 tempo_espera = TIMEOUT;
+    int indice_crop = 0;
+    SDL_Rect r = {-100, SCREEN_HEIGHT/2 - 90, 90, 130};
+    SDL_Rect c;
+    while(!quit){
+    	 SDL_Event evt;
+    	int is_evt = aux_WaitEventTimeoutCount(&evt, &tempo_espera);
+    	if(is_evt && evt.type==SDL_QUIT){
+    		quit=1;
+    	}else {
+    		tempo_espera = TIMEOUT;
+    		c = (SDL_Rect) {indice_crop*90, 0, 90, 130};
+    		if(r.x > SCREEN_WIDTH+10){
+    			r.x = -100;
+    		}else{
+    			r.x += 4;
+    		}
+    		
+    		indice_crop++;
+    		if(indice_crop>7){
+    			indice_crop = 0;
+    		}
+
+    		SDL_SetRenderDrawColor(ren, 0x87, 0xCE, 0xEB, 1);
+    		SDL_RenderClear(ren);
+    		SDL_RenderCopy(ren, img, &c, &r);
+    		SDL_RenderPresent(ren);
+    	}
     }
-    
-    while (!quit){ 
-		SDL_SetRenderDrawColor(ren, 0x00, 0x00, 0x00, 0x00);
-		SDL_RenderClear(ren);
-		SDL_SetRenderDrawColor(ren, 0x87, 0xce, 0xfa, 0x00);
-		SDL_RenderFillRect(ren, &r1);
-		SDL_SetRenderDrawColor(ren, 0xf5, 0xde, 0xb3, 0x00);
-		SDL_RenderFillRect(ren, &r2);
-		SDL_SetRenderDrawColor(ren, 0xc8, 0xa2, 0xc8, 0x00);
-		SDL_RenderFillRect(ren, &r3);
-		
-		//escutando evento
-		int isevt = SDL_WaitEventTimeout(&e, espera);
-		if (isevt) {
-            if (e.type == SDL_QUIT) {
-            	quit = 1;
-            }else if (e.type == SDL_KEYDOWN) {
-                switch (e.key.keysym.sym) {
-                    case SDLK_UP:
-                        r1.y -= 5;
-                        break;
-                    case SDLK_DOWN:
-                        r1.y += 5;
-                        break;
-                    case SDLK_LEFT:
-                        r1.x -= 5;
-                        break;
-                    case SDLK_RIGHT:
-                        r1.x += 5;
-                        break;
-                }
-        	}
-        } else {
-        	//refefine o tempo de espera e mexe linearmente os quadrados
-            define_comportamento(&r1, delta_r, 0);
-			define_comportamento(&r2, delta_r, 1);
-			define_comportamento(&r3, delta_r, 2);
-			SDL_Delay(200);
-        }
-		SDL_RenderPresent(ren);
-    }
-	
     /* FINALIZACAO */
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
