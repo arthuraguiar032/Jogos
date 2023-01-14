@@ -1,6 +1,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
+//#include <SDL2/SDL_ttf.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <time.h>
@@ -8,174 +8,160 @@
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
 #define TIMEOUT 30
-#define FPS 12
+#define FPS 24
 
+typedef enum{
+	false = 0,
+	true
+}boolean;
+
+//States Machine
+typedef enum{
+	STATE_MAIN_MENU,
+	STATE_INSTRUCTIONS,
+	STATE_SCORES,
+	STATE_PLAY
+}Game_State;
+
+typedef enum{
+	STATE_STANDING,
+	STATE_DUCKING,
+	STATE_JUMPING
+}Player_State;
+
+//Control structures 
 typedef struct{
+	Game_State state;
 	int high_score;
 	int max_jump;
 	int y_ground;
-}Spiel;
+	int current_score;
+}Game;
 
 typedef struct{
 	int dy_solo;
-	int hitted_max;
+	boolean hitted_max;
 }Control_jump;
 
 typedef struct{
-	int is_down;
-	int is_jumping;
-	int lives;
+	int index_crop;
+	Uint32 previous_update;
+}Control_Visual;
+
+typedef struct{
+	Player_State state;
+	SDL_Point position;
+	Control_jump jump;
+	Control_Visual visual;
 	int height;
-	Control_jump jump;	
-}Trex;
+}Player;
 
 //funcoes auxiliares SDL
-void SDL_inicia();
-SDL_Window* SDL_criaJanela(char titulo[]);
-SDL_Renderer* SDL_criaRenderer(SDL_Window* win);
+void SDL_init();
+SDL_Window* SDL_aux_CreateWindow(char titulo[]);
+SDL_Renderer* SDL_aux_createRenderer(SDL_Window* win);
 
 //utils
 int aux_WaitEventTimeoutCount(SDL_Event* evt, Uint32* ms);
-void init_game(Spiel *game, Trex *player);
+void init_game(Game *game);
+void init_player(Player *player);
 
-int main (int argc, char* args[]) {
-    /* INICIALIZACAO */
-	SDL_inicia();
-    SDL_Window* win = SDL_criaJanela("Dino Run");
-    SDL_Renderer* ren = SDL_CreateRenderer(win, -1, 0);
-    SDL_Texture* trex_running = IMG_LoadTexture(ren, "../assets/images/up-trex-sprite.png");
-    SDL_Texture* trex_down = IMG_LoadTexture(ren, "../assets/images/down-trex-sprite.png");
-    assert(trex_running != NULL);
-    assert(trex_down != NULL);
+//controladoras de comportamentos e visual
+void player_standing(Player *player, SDL_Renderer *ren);
+void player_ducking(Player *player, SDL_Renderer *ren);
+void player_jumping(Player *player,  int max_jump, SDL_Renderer *ren);
 
-    Spiel game;
-    Trex player;
-    init_game(&game, &player);
-    
-    int quit = 0;
-    Uint32 tempo_espera = TIMEOUT;
-    int indice_crop = 0;
-    
-    Uint32 comeco = SDL_GetTicks();
-    Uint32 anterior  = comeco;
+SDL_Texture* trex_standing;
+SDL_Texture* trex_ducking;
 
-    /* EXECUCAO */
+int main(int argc, char* args[]){
+	//Inicialização
+	SDL_init();
+	SDL_Window *win = SDL_aux_CreateWindow("Dino Runner");
+	SDL_Renderer *ren = SDL_aux_createRenderer(win);
+	Game game;
+	init_game(&game);
+	Player player;
+	init_player(&player);
+
+	//carregando texturas
+	trex_standing = IMG_LoadTexture(ren, "../assets/images/up-trex-sprite.png");
+    trex_ducking = IMG_LoadTexture(ren, "../assets/images/down-trex-sprite.png");
+    SDL_Texture* scenario = IMG_LoadTexture(ren, "../assets/images/scenario.png");
+    assert(trex_standing != NULL);
+    assert(trex_ducking != NULL);
+    assert(scenario != NULL);
+
+    //variaveis de controle
+    int quit = false;
+    //Control_Visual visual;
+    //control_FR.previous_update = SDL_GetTicks();
+
+	//Execução
+    //loop principal
     while(!quit){
+    	//capturando os eventos desejados
     	SDL_Event evt;
-    	int is_evt = aux_WaitEventTimeoutCount(&evt, &tempo_espera);
-    	if(is_evt){
-    		switch (evt.type){
-    			case SDL_QUIT:
-    				quit = 1;
-    				break;
-    			case SDL_KEYDOWN:
-    				// if(evt.key.keysym.sym == SDLK_DOWN && !player.is_jumping && !player.is_down){
-					// 	player.is_down = 1;
-					// 	printf("Abaixou\n");
-					// 	break;
-					// }
-					// if(evt.key.keysym.sym == SDLK_UP && player.is_down && !player.is_jumping){
-					// 	player.is_down = 0;
-					// 	printf("Levantou\n");
-					// 	break;
-					// }
-					// if(evt.key.keysym.sym == SDLK_UP && !player.is_down && !player.is_jumping){
-					// 	player.is_jumping = 1;
-					// 	printf("Pulou\n");
-					// 	break;
-					// }
-					switch (evt.key.keysym.sym){
-						case SDLK_DOWN:
-							if(!player.is_jumping && !player.is_down){
-								player.is_down = 1;
-								printf("Abaixou\n");
-							}
-							break;
+    	while( SDL_PollEvent( &evt ) != 0 ){
+			switch(evt.type){
+				case SDL_QUIT:
+					quit = true;
+					break;
 
-						case SDLK_UP:
-							
-							break;
+				case SDL_KEYDOWN:
+					if(evt.key.keysym.sym == SDLK_DOWN && player.state == STATE_STANDING){
+						player.state = STATE_DUCKING;
+					}else if(evt.key.keysym.sym == SDLK_UP && player.state == STATE_DUCKING){
+						player.state = STATE_STANDING;
+					}else if(evt.key.keysym.sym == SDLK_UP && player.state == STATE_STANDING){
+						player.state = STATE_JUMPING;
 					}
-    			case SDL_KEYUP:
-    				if(evt.key.keysym.sym == SDLK_DOWN && !player.is_jumping && player.is_down){
-						player.is_down = 0;
-						printf("Levantou\n");
-					}
-    				break;
-    		}
-    	}else {
-    		tempo_espera = TIMEOUT;
-    	}
-    	Uint32 agora = SDL_GetTicks();
-    	SDL_SetRenderDrawColor(ren, 0x87, 0xCE, 0xEB, 1);
-   		SDL_RenderClear(ren);
-   		SDL_Rect rex_posicao;
-    	SDL_Rect rex_crop; 
-    	
-    	//controla framerate do rex
-    	if(!player.is_jumping){
-    		if (agora-anterior>(1000/FPS)){
-	    		indice_crop++;
-	    		anterior = agora;
-	    	}
-	    	if(indice_crop==4){//probabilidade de piscar o olho
-	    		srand(time(NULL));
-	    		int num = rand() % 10; //entre 0 e 9
-	    		if(num > 3) indice_crop = 5;
-	    	}    		
-    	}
-    	if(indice_crop>7){
-    		indice_crop = 0;
-    	}
+					break;
 
-    	
-    	if(player.is_down){
-    		rex_posicao = (SDL_Rect){50, 536, player.height, player.height/2};
-    		rex_crop = (SDL_Rect) {indice_crop*32, 0, 32, 16};
-    		SDL_RenderCopy(ren, trex_down, &rex_crop, &rex_posicao);
-    	}
-    	if(!player.is_jumping && !player.is_down){
-    		rex_posicao = (SDL_Rect){50, 472, player.height, player.height};
-    		rex_crop = (SDL_Rect) {indice_crop*32, 0, 32, 32};
-    		SDL_RenderCopy(ren, trex_running, &rex_crop, &rex_posicao);
-    	}
-    	if(player.is_jumping){
-    		if(!player.jump.hitted_max){
-    			if(player.jump.dy_solo>=game.max_jump){
-    				player.jump.hitted_max = 1;
-    			}else{
-    				player.jump.dy_solo += 8;
-    			}
-    		}else{
-    			if(player.jump.dy_solo==0){
-    				player.jump.hitted_max = 0;
-    				player.is_jumping = 0;
-    			}else{
-    				player.jump.dy_solo -= 8;
-    			}
-    		}
-    		rex_posicao = (SDL_Rect){50, 472-player.jump.dy_solo, player.height, player.height};
-    		rex_crop = (SDL_Rect) {indice_crop*32, 0, 32, 32};
-    		SDL_RenderCopy(ren, trex_running, &rex_crop, &rex_posicao);
-    	}
-   		SDL_RenderPresent(ren);
+
+				case SDL_KEYUP:
+					if(evt.key.keysym.sym == SDLK_DOWN && player.state == STATE_DUCKING){
+						player.state = STATE_STANDING;
+					}
+					break;
+			}
+		}
+		SDL_Rect scenario_position = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+		SDL_RenderCopy(ren, scenario, NULL, &scenario_position);
+
+		if(player.state == STATE_JUMPING){
+			player_jumping(&player, game.max_jump, ren);
+		}else if(player.state == STATE_STANDING){
+			player_standing(&player, ren);
+		}else if(player.state == STATE_DUCKING){
+			player_ducking(&player, ren);
+		}
+		Uint32 current_update = SDL_GetTicks();
+		if((current_update-player.visual.previous_update)>=1000/FPS && player.state != STATE_JUMPING){
+			player.visual.previous_update = current_update;
+			player.visual.index_crop = (player.visual.index_crop+1)%7;
+		}
+
+		SDL_RenderPresent(ren);
     }
 
-    /* FINALIZACAO */
-    SDL_DestroyTexture(trex_running);
-    SDL_DestroyTexture(trex_down);
+	//Finalização
+	SDL_DestroyTexture(trex_standing);
+    SDL_DestroyTexture(trex_ducking);
+    SDL_DestroyTexture(scenario);
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
     SDL_Quit();
+    return 0;
 }
 
-void SDL_inicia(){
+void SDL_init(){
 	if (SDL_Init(SDL_INIT_EVERYTHING))
 		printf("Erro de inicialização no SDL.\nErro SDL: %s", SDL_GetError());
 	return;
 }
 
-SDL_Window* SDL_criaJanela(char titulo[]){
+SDL_Window* SDL_aux_CreateWindow(char titulo[]){
 	SDL_Window* win = SDL_CreateWindow(titulo,
                          SDL_WINDOWPOS_UNDEFINED,
                          SDL_WINDOWPOS_UNDEFINED,
@@ -186,7 +172,7 @@ SDL_Window* SDL_criaJanela(char titulo[]){
 	return win;
 }
 
-SDL_Renderer* SDL_criaRenderer(SDL_Window* win){
+SDL_Renderer* SDL_aux_createRenderer(SDL_Window* win){
 	SDL_Renderer* ren = SDL_CreateRenderer(win, -1, 0);
 	if (ren==NULL)
 		printf("Erro na criação do Renderizador.\nErro SDL: %s", SDL_GetError());
@@ -207,16 +193,62 @@ int aux_WaitEventTimeoutCount(SDL_Event* evt, Uint32* ms){
 	return is_evt;
 }
 
-void init_game(Spiel *game, Trex *player){
-	player->lives = 3;
-	player->is_jumping = 0;
-	player->is_down = 0;
-	player->height = 128;
-
-	player->jump.dy_solo = 0;
-	player->jump.hitted_max = 0;
-
+void init_game(Game *game){
 	game->high_score = 0;
 	game->max_jump = 128;
 	game->y_ground = 600;
+
+	game->state = STATE_PLAY;
+}
+
+void init_player(Player *player){
+	player->state = STATE_STANDING;
+	player->position.x = 50;
+	player->position.y = 472;
+
+	player->jump.dy_solo = 0;
+	player->jump.hitted_max = false;
+
+	player->height = 128;
+
+	player->visual.index_crop = 0;
+	player->visual.previous_update = SDL_GetTicks();
+}
+
+void player_standing(Player *player, SDL_Renderer *ren){
+	SDL_Rect standing_position = {50, 472, player->height, player->height};
+	player->position = (SDL_Point){50, 472};
+	player->jump.dy_solo = 0;
+	player->jump.hitted_max = false;
+
+	SDL_Rect rex_crop = {player->visual.index_crop*32, 0, 32, 32};
+	SDL_RenderCopy(ren , trex_standing, &rex_crop, &standing_position);
+}
+
+void player_ducking(Player *player, SDL_Renderer *ren){
+	SDL_Rect ducking_position = {50, 528, player->height, player->height/2};
+
+	SDL_Rect rex_crop = {player->visual.index_crop*32, 0, 32, 16};
+	SDL_RenderCopy(ren , trex_ducking, &rex_crop, &ducking_position);
+}
+
+void player_jumping(Player *player, int max_jump, SDL_Renderer *ren){
+	if(player->jump.hitted_max){
+		if(player->jump.dy_solo<=0){
+			player->state = STATE_STANDING;
+		}else{
+			//int aux = player.position.y*1,2;
+			//player.position.y = aux;
+			player->jump.dy_solo -= 8;
+		}
+	}else{
+		if(player->jump.dy_solo>=max_jump){
+			player->jump.hitted_max=true;
+		}else{
+			player->jump.dy_solo += 6;
+		}
+	}
+	SDL_Rect rex_posicao = {50, 472-player->jump.dy_solo, player->height, player->height};
+    SDL_Rect rex_crop = {player->visual.index_crop*32, 0, 32, 32};
+    SDL_RenderCopy(ren, trex_standing, &rex_crop, &rex_posicao);
 }
