@@ -5,7 +5,8 @@
 
 #define SCREEN_WIDTH 960
 #define SCREEN_HEIGHT 540
-#define TIMEOUT 35
+#define TIMEOUT 10
+#define FPS 24
 
 void SDL_inicia(){
 	if (SDL_Init(SDL_INIT_EVERYTHING))
@@ -59,30 +60,46 @@ int main (int argc, char* args[]) {
     int indice_crop = 0;
     SDL_Rect r = {-100, SCREEN_HEIGHT/2 - 90, 90, 130};
     SDL_Rect c;
+	c = (SDL_Rect){indice_crop*90, 0, 90, 130};
+	SDL_SetRenderDrawColor(ren, 0x87, 0xCE, 0xEB, 1);
+    SDL_RenderClear(ren);
+    SDL_RenderCopy(ren, img, &c, &r);
+    SDL_RenderPresent(ren);
+	
+	Uint32 ultima_atualizacao =  SDL_GetTicks();
+	//printf("Primeira att: %lu\n", (unsigned long)ultima_atualizacao);
     while(!quit){
-    	 SDL_Event evt;
+    	SDL_Event evt;
     	int is_evt = aux_WaitEventTimeoutCount(&evt, &tempo_espera);
-    	if(is_evt && evt.type==SDL_QUIT){
-    		quit=1;
+    	if(is_evt){
+			 if(evt.type==SDL_QUIT){    		
+				quit=1;
+			}
     	}else {
-    		tempo_espera = TIMEOUT;
-    		c = (SDL_Rect) {indice_crop*90, 0, 90, 130};
-    		if(r.x > SCREEN_WIDTH+10){
+    		if(tempo_espera<=0){
+				tempo_espera = TIMEOUT;			
+			}
+    	}
+		Uint32 agora =  SDL_GetTicks();
+		Uint32 passagem_tempo = agora - ultima_atualizacao;
+		if(passagem_tempo >= 1000/FPS){
+			ultima_atualizacao = agora;
+			c.x = indice_crop*90;
+			indice_crop++;
+			
+			if(r.x > SCREEN_WIDTH+10){
     			r.x = -100;
     		}else{
-    			r.x += 4;
+    			r.x = r.x + 0.5*passagem_tempo;
     		}
-    		
-    		indice_crop++;
     		if(indice_crop>7){
     			indice_crop = 0;
     		}
-
+		}
     		SDL_SetRenderDrawColor(ren, 0x87, 0xCE, 0xEB, 1);
     		SDL_RenderClear(ren);
     		SDL_RenderCopy(ren, img, &c, &r);
     		SDL_RenderPresent(ren);
-    	}
     }
     /* FINALIZACAO */
     SDL_DestroyRenderer(ren);
