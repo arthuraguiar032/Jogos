@@ -1,6 +1,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-//#include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_ttf.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -10,19 +10,18 @@
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
 #define TIMEOUT 10
-#define FPS 24
+#define FPS 30
 #define JUMP_VEL 8.5
 
 /*Compilação:
-gcc ../headers/queue.c test_queue.c -g -lSDL2 -o test
+gcc main.c ../headers/queue.c -g -lSDL2 -lSDL2_image -o main
+gcc main2.c -g -lSDL2 -lSDL2_image -lSDL2_ttf -o main2
 */
-
 
 //States Machine
 typedef enum{
 	STATE_MAIN_MENU,
 	STATE_INSTRUCTIONS,
-	STATE_SCORES,
 	STATE_PLAY,
 	STATE_PAUSE
 }Game_State;
@@ -37,10 +36,11 @@ typedef enum{
 //Control structures 
 typedef struct{
 	Game_State state;
-	int speed;
 	Uint32 previous_update;
+	float speed;
+	int x_pos_backgroung;
+	int points;
 }Game;
-
 
 typedef struct{
 	Player_State state;
@@ -51,17 +51,39 @@ typedef struct{
 	int step_index;
 }Player;
 
+typedef struct{
+	SDL_Point position;
+	int width;
+	int height;
+	float speed;
+}Cloud;
+
+typedef struct{
+}Cactus;
+
+SDL_Texture* dino_running;
+SDL_Texture* dino_dead;
+SDL_Texture* scenario;
+SDL_Texture* cloud_img;
+SDL_Texture* cactus_img;
+SDL_Texture* track_img;
+SDL_Texture* txt;
+
 //funcoes auxiliares SDL
 void SDL_init();
 SDL_Window* aux_SDLCreateWindow(char titulo[]);
 SDL_Renderer* aux_SDLCreateRenderer(SDL_Window* win);
 int aux_WaitEventTimeoutCount(SDL_Event* evt, Uint32* ms);
+TTF_Font* aux_OpenFont();
 
-//utils
+//game functions
 void init_game(Game *game);
-void init_player(Player *player);
+void load_textures(SDL_Renderer *ren);
+void background(Game *game, SDL_Renderer *ren);
+void score(Game *game, SDL_Renderer *ren, TTF_Font* fnt);
 
-//controladoras de comportamentos e visual
+//player functions
+void init_player(Player *player);
 void player_standing(Player *player);
 void player_ducking(Player *player);
 void player_jumping(Player *player);
@@ -69,30 +91,43 @@ void player_eyeBlinkControl(Player *player);
 void player_update(Player *player);
 void player_draw(Player *player, SDL_Renderer *ren);
 
-SDL_Texture* dino_running;
-SDL_Texture* dino_dead;
+//cloud functions
+void init_cloud(Cloud *cloud);
+void cloud_update(Cloud *cloud, float game_speed);
+void cloud_draw(Cloud *cloud, SDL_Renderer *ren);
+
+//cactus functions
+void init_cactus(Cactus *cactus);
+void update_cactus(Cactus *cactus);
+void draw_cactus(Cactus *cactus, SDL_Renderer *ren);
+int verify_colision(Player *player, Cactus *cactus);
 
 int main(int argc, char* args[]){
 	SDL_init();
 	SDL_Window *win = aux_SDLCreateWindow("Dino Runner");
 	SDL_Renderer *ren = aux_SDLCreateRenderer(win);
+	
+	TTF_Init();
+	TTF_Font* fnt;
+	fnt = aux_OpenFont();
+
 	Game game;
 	init_game(&game);
 	Player player;
 	init_player(&player);
 
-	//carregando texturas
-	dino_running = IMG_LoadTexture(ren, "../assets/images/trex.png");
-	dino_dead = IMG_LoadTexture(ren, "../assets/images/dead-trex.png");
-    SDL_Texture* scenario = IMG_LoadTexture(ren, "../assets/images/scenario.png");
-    assert(dino_running != NULL);
-    assert(dino_dead != NULL);
-    assert(scenario != NULL);
+	load_textures(ren);
+	Cloud cloud;
+	init_cloud(&cloud);
 
     //variaveis de controle
     bool quit = false;
     Uint32 tempo_espera = TIMEOUT;
-
+	
+	SDL_Rect scenario_position = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+	SDL_RenderCopy(ren, scenario, NULL, &scenario_position);
+	player_draw(&player, ren);
+	SDL_RenderPresent(ren);
     while(!quit){
     	SDL_Event evt;
     	int is_evt = aux_WaitEventTimeoutCount(&evt, &tempo_espera);
@@ -123,24 +158,37 @@ int main(int argc, char* args[]){
     			tempo_espera = TIMEOUT;
     		}
     	}
-
-    	SDL_Rect scenario_position = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
-		SDL_RenderCopy(ren, scenario, NULL, &scenario_position);
+    	
 
 		Uint32 current_update = SDL_GetTicks();
 		if((current_update-game.previous_update)>=1000/FPS){
 			game.previous_update = current_update;
 			player_update(&player);
-		}
-		player_draw(&player, ren);
+			//printf("game_speed: %f\n", game.speed);
+			cloud_update(&cloud, game.speed);
 
-		SDL_RenderPresent(ren);
+			//desenhando cenario
+			//SDL_RenderCopy(ren, scenario, NULL, &scenario_position);
+			background(&game, ren);
+			cloud_draw(&cloud, ren);
+			score(&game, ren, fnt);
+			player_draw(&player, ren);
+			SDL_RenderPresent(ren);
+		}
     }
 
     //Finalizacao
     SDL_DestroyTexture(dino_running);
     SDL_DestroyTexture(dino_dead);
     SDL_DestroyTexture(scenario);
+	SDL_DestroyTexture(cloud_img);
+	SDL_DestroyTexture(cactus_img);
+	SDL_DestroyTexture(track_img);
+
+	SDL_DestroyTexture(txt);
+	TTF_CloseFont(fnt);
+	TTF_Quit();
+
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
     SDL_Quit();
@@ -185,10 +233,35 @@ int aux_WaitEventTimeoutCount(SDL_Event* evt, Uint32* ms){
 	return is_evt;
 }
 
+TTF_Font* aux_OpenFont(){
+	int font_size = 20;
+	TTF_Font* font = TTF_OpenFont("../assets/fonts/PressStart2P.ttf", font_size);
+	assert(font!=NULL);
+	return font; 
+}
+
+
+void load_textures(SDL_Renderer *ren){
+	dino_running = IMG_LoadTexture(ren, "../assets/images/trex.png");
+	dino_dead = IMG_LoadTexture(ren, "../assets/images/dead-trex.png");
+    scenario = IMG_LoadTexture(ren, "../assets/images/scenario.png");
+	cloud_img = IMG_LoadTexture(ren, "../assets/images/cloud.png");
+	cactus_img = IMG_LoadTexture(ren, "../assets/images/cactus.png");
+	track_img = IMG_LoadTexture(ren, "../assets/images/track.png");
+	assert(track_img != NULL);
+	assert(cactus_img != NULL);
+	assert(cloud_img != NULL);	
+    assert(dino_running != NULL);
+    assert(dino_dead != NULL);
+    assert(scenario != NULL);
+}
+
 void init_game(Game *game){
 	game->state = STATE_PLAY;
-	game->speed = 20;
+	game->speed = 14;
 	game->previous_update = SDL_GetTicks();
+	game->x_pos_backgroung = 0;
+	game->points = 0;
 }
 
 void init_player(Player *player){
@@ -224,7 +297,7 @@ void player_jumping(Player *player){
 	//testar uma nova formula
 	player->position.y -= player->jump_vel*4;
 	player->jump_vel -= 0.8;
-	if(player->jump_vel< -JUMP_VEL){
+	if(player->position.y >= 455){
 		player->state = STATE_STANDING;
 		player->jump_vel = JUMP_VEL;
 	}
@@ -266,4 +339,61 @@ void player_draw(Player *player, SDL_Renderer *ren){
 		crop = player->sprites[0][player->step_index];
 	}
 	SDL_RenderCopy(ren, dino_running, &crop, &position);
+}
+
+void init_cloud(Cloud *cloud){
+	srand(time(NULL));
+	cloud->position.x = SCREEN_WIDTH + (rand()%1500) + 10;
+	cloud->position.y = (rand()%150)+50;
+	cloud->width = 100;
+	cloud->height = 50;
+}
+
+void cloud_update(Cloud *cloud, float game_speed){
+	cloud->position.x -= game_speed;
+	if(cloud->position.x<-cloud->width){
+		srand(time(NULL));
+		cloud->position.x = SCREEN_WIDTH + (rand()%1500) + 10;
+		cloud->position.y = (rand()%200)+25;
+	}
+
+}
+void cloud_draw(Cloud *cloud, SDL_Renderer *ren){
+	SDL_Rect pos = {cloud->position.x, cloud->position.y, cloud->width, cloud->height};
+	SDL_RenderCopy(ren, cloud_img, NULL, &pos);
+}
+
+void background(Game *game, SDL_Renderer *ren){
+	//SDL_RenderCopy(ren, scenario, NULL, &scenario_position);
+	game->x_pos_backgroung += game->speed;
+	if(game->x_pos_backgroung>=SCREEN_WIDTH){
+		game->x_pos_backgroung = 0;
+	}
+	SDL_Rect pos = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+	SDL_Rect crop = {game->x_pos_backgroung, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+	SDL_RenderCopy(ren, scenario, &crop, &pos);
+
+	//track
+	SDL_RenderCopy(ren, track_img, &crop, &pos);
+}
+
+void score(Game *game, SDL_Renderer *ren, TTF_Font* fnt){
+	game->points+=1;
+	if(game->points%100==0){
+		game->speed+=1;
+	}
+	char str_score[7];
+	sprintf(str_score, "%06d", game->points);
+	char str_text[15] = {"Points: "};
+	strcat(str_text, str_score);
+
+	SDL_Color clr = {0x00, 0x00, 0x00, 0xFF};
+	SDL_Surface *sfc = TTF_RenderText_Blended(fnt, str_text, clr);
+	assert(sfc!=NULL);
+	txt = SDL_CreateTextureFromSurface(ren, sfc);
+	assert(txt!=NULL);
+	SDL_FreeSurface(sfc);
+
+	SDL_Rect pos = {1050, 25, 180, 25};
+	SDL_RenderCopy(ren, txt, NULL, &pos);
 }
