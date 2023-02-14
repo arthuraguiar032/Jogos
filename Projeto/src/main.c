@@ -74,7 +74,7 @@ void SDL_init();
 SDL_Window* aux_SDLCreateWindow(char titulo[]);
 SDL_Renderer* aux_SDLCreateRenderer(SDL_Window* win);
 int aux_WaitEventTimeoutCount(SDL_Event* evt, Uint32* ms);
-TTF_Font* aux_OpenFont();
+TTF_Font* aux_OpenFont(int size);
 
 //game functions
 void init_game(Game *game);
@@ -110,7 +110,7 @@ int main(int argc, char* args[]){
 	
 	TTF_Init();
 	TTF_Font* fnt;
-	fnt = aux_OpenFont();
+	fnt = aux_OpenFont(20);
 
 	Game game;
 	init_game(&game);
@@ -128,10 +128,9 @@ int main(int argc, char* args[]){
     Uint32 time_dead = 0;
     Uint32 tempo_espera = TIMEOUT;
 	
-	SDL_Rect scenario_position = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
-	SDL_RenderCopy(ren, scenario, NULL, &scenario_position);
-	player_draw(&player, ren);
-	SDL_RenderPresent(ren);
+	// SDL_Rect scenario_position = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+	// SDL_RenderCopy(ren, scenario, NULL, &scenario_position);
+
     while(!quit){
     	SDL_Event evt;
     	int is_evt = aux_WaitEventTimeoutCount(&evt, &tempo_espera);
@@ -142,18 +141,28 @@ int main(int argc, char* args[]){
 					break;
 
 				case SDL_KEYDOWN:
-					if(evt.key.keysym.sym == SDLK_DOWN && player.state == STATE_STANDING){
-						player.state = STATE_DUCKING;
-					}else if(evt.key.keysym.sym == SDLK_UP && player.state == STATE_DUCKING){
-						player.state = STATE_STANDING;
-					}else if(evt.key.keysym.sym == SDLK_UP && player.state == STATE_STANDING){
-						player.state = STATE_JUMPING;
+					if(game.state == STATE_PLAY){
+						if(evt.key.keysym.sym == SDLK_DOWN && player.state == STATE_STANDING){
+							player.state = STATE_DUCKING;
+						}else if(evt.key.keysym.sym == SDLK_UP && player.state == STATE_DUCKING){
+							player.state = STATE_STANDING;
+						}else if(evt.key.keysym.sym == SDLK_UP && player.state == STATE_STANDING){
+							player.state = STATE_JUMPING;
+						}
+					}else if(game.state==STATE_MAIN_MENU || game.state==STATE_GAME_OVER){
+						init_game(&game);
+						game.state = STATE_PLAY;
+						init_player(&player);
+						init_cloud(&cloud);
+						List_free(obstacles);
 					}
 					break;
 
 				case SDL_KEYUP:
-					if(evt.key.keysym.sym == SDLK_DOWN && player.state == STATE_DUCKING){
-						player.state = STATE_STANDING;
+					if(game.state = STATE_PLAY){
+						if(evt.key.keysym.sym == SDLK_DOWN && player.state == STATE_DUCKING){
+							player.state = STATE_STANDING;
+						}
 					}
 					break;
 			}
@@ -217,9 +226,94 @@ int main(int argc, char* args[]){
 				player_draw(&player, ren);
 				if(now-time_dead>=TIME_ON_DEAD){
 					game.state = STATE_GAME_OVER;
+					time_dead = 0;
 				}
 				SDL_RenderPresent(ren);
 			}
+		}
+
+		if(game.state == STATE_MAIN_MENU){
+			background_draw(&game, ren);
+			player_draw(&player, ren);
+
+			char start[] = {"Press any Key to Start"};
+
+			SDL_Color clr = {0x00, 0x00, 0x00, 0xFF};
+			
+			TTF_Font* fnt_menu;
+			fnt_menu = aux_OpenFont(40);
+
+			SDL_Surface *sfc = TTF_RenderText_Blended(fnt_menu, start, clr);
+			assert(sfc!=NULL);
+			txt = SDL_CreateTextureFromSurface(ren, sfc);
+			assert(txt!=NULL);
+			SDL_FreeSurface(sfc);
+			SDL_Rect pos = {SCREEN_WIDTH/2 - 300, SCREEN_HEIGHT/2-100, 600, 70};
+			SDL_RenderCopy(ren, txt, NULL, &pos);
+
+			TTF_CloseFont(fnt_menu);
+			SDL_RenderPresent(ren);
+		}
+
+		if(game.state == STATE_GAME_OVER){
+			//#e7fbff
+			SDL_SetRenderDrawColor(ren, 0xe7, 0xfb, 0xff, 255);
+			SDL_RenderClear(ren);
+			
+
+			char str_score[12];
+			sprintf(str_score, "%06d", game.points);
+			char str_text[20] = {"Your score: "};
+
+			strcat(str_text, str_score);
+			char reset[35] = {"Press any Key to Restart"};
+			char gameover[10] = {"GAME OVER"};
+
+			SDL_Color clr = {0x00, 0x00, 0x00, 0xFF};
+			
+			//Points
+			SDL_Surface *sfc = TTF_RenderText_Blended(fnt, str_text, clr);
+			assert(sfc!=NULL);
+			txt = SDL_CreateTextureFromSurface(ren, sfc);
+			assert(txt!=NULL);
+			SDL_FreeSurface(sfc);
+			SDL_Rect pos = {SCREEN_WIDTH/2 -100, SCREEN_HEIGHT/2, 200, 25};
+			SDL_RenderCopy(ren, txt, NULL, &pos);
+
+			//Restart
+			TTF_Font* fnt_restart;
+			fnt_restart = aux_OpenFont(30);
+
+			sfc = TTF_RenderText_Blended(fnt_restart, reset, clr);
+			assert(sfc!=NULL);
+			txt = SDL_CreateTextureFromSurface(ren, sfc);
+			assert(txt!=NULL);
+			SDL_FreeSurface(sfc);
+			pos = (SDL_Rect){SCREEN_WIDTH/2 -170, SCREEN_HEIGHT/2+200, 340, 40};
+			SDL_RenderCopy(ren, txt, NULL, &pos);
+			TTF_CloseFont(fnt_restart);
+
+			//Game Over
+			TTF_Font* fnt_over;
+			fnt_over = aux_OpenFont(60);
+
+			sfc = TTF_RenderText_Blended(fnt_over, gameover, clr);
+			assert(sfc!=NULL);
+			txt = SDL_CreateTextureFromSurface(ren, sfc);
+			assert(txt!=NULL);
+			SDL_FreeSurface(sfc);
+			pos = (SDL_Rect){SCREEN_WIDTH/2-200, SCREEN_HEIGHT/2-300, 400, 60};
+			SDL_RenderCopy(ren, txt, NULL, &pos);
+			TTF_CloseFont(fnt_over);
+
+
+			//Dino
+			player.state = STATE_DEAD;
+			player.position = (SDL_Point){SCREEN_WIDTH/2-64, SCREEN_HEIGHT/2-150};
+			player_draw(&player, ren);
+
+
+			SDL_RenderPresent(ren);
 		}
     }
 
@@ -282,8 +376,8 @@ int aux_WaitEventTimeoutCount(SDL_Event* evt, Uint32* ms){
 	return is_evt;
 }
 
-TTF_Font* aux_OpenFont(){
-	int font_size = 20;
+TTF_Font* aux_OpenFont(int size){
+	int font_size = size;//20
 	TTF_Font* font = TTF_OpenFont("../assets/fonts/PressStart2P.ttf", font_size);
 	assert(font!=NULL);
 	return font; 
@@ -308,18 +402,12 @@ void load_textures(SDL_Renderer *ren){
 }
 
 void init_game(Game *game){
-	game->state = STATE_PLAY;
+	game->state = STATE_MAIN_MENU;
 	game->speed = 14;
 	game->previous_update = SDL_GetTicks();
 	game->x_pos_backgroung = 0;
 	game->points = 0;
 }
-
-void game_update(){}
-
-void game_over(){}
-
-void main_menu(){}
 
 void init_player(Player *player){
 	player->state = STATE_STANDING;
