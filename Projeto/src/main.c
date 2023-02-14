@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <time.h>
 #include <stdbool.h>
+#include "../headers/list.h"
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -14,8 +15,7 @@
 #define JUMP_VEL 8.5
 
 /*Compilação:
-gcc main.c ../headers/queue.c -g -lSDL2 -lSDL2_image -o main
-gcc main2.c -g -lSDL2 -lSDL2_image -lSDL2_ttf -o main2
+gcc main.c ../headers/list.c -g -lSDL2 -lSDL2_image -lSDL2_ttf -o main
 */
 
 //States Machine
@@ -31,7 +31,6 @@ typedef enum{
 	STATE_DUCKING,
 	STATE_JUMPING
 }Player_State;
-
 
 //Control structures 
 typedef struct{
@@ -58,15 +57,13 @@ typedef struct{
 	float speed;
 }Cloud;
 
-typedef struct{
-}Cactus;
-
 SDL_Texture* dino_running;
 SDL_Texture* dino_dead;
 SDL_Texture* scenario;
 SDL_Texture* cloud_img;
 SDL_Texture* cactus_img;
 SDL_Texture* track_img;
+SDL_Texture* bird;
 SDL_Texture* txt;
 
 //funcoes auxiliares SDL
@@ -96,11 +93,11 @@ void init_cloud(Cloud *cloud);
 void cloud_update(Cloud *cloud, float game_speed);
 void cloud_draw(Cloud *cloud, SDL_Renderer *ren);
 
-//cactus functions
-void init_cactus(Cactus *cactus);
-void update_cactus(Cactus *cactus);
-void draw_cactus(Cactus *cactus, SDL_Renderer *ren);
-int verify_colision(Player *player, Cactus *cactus);
+//obstacle functions
+void init_obstacle(Obstacle *obs);
+void obstacle_update(List *obs, float game_speed);
+void obstacle_draw(Obstacle *obs, SDL_Renderer *ren);
+//int verify_colision(Player *player, Cactus *cactus);
 
 int main(int argc, char* args[]){
 	SDL_init();
@@ -113,12 +110,14 @@ int main(int argc, char* args[]){
 
 	Game game;
 	init_game(&game);
+	load_textures(ren);
+
 	Player player;
 	init_player(&player);
-
-	load_textures(ren);
 	Cloud cloud;
 	init_cloud(&cloud);
+
+	List *obstacles = List_create();
 
     //variaveis de controle
     bool quit = false;
@@ -158,22 +157,39 @@ int main(int argc, char* args[]){
     			tempo_espera = TIMEOUT;
     		}
     	}
-    	
+    	Uint32 current_update = SDL_GetTicks();
 
-		Uint32 current_update = SDL_GetTicks();
-		if((current_update-game.previous_update)>=1000/FPS){
-			game.previous_update = current_update;
-			player_update(&player);
-			//printf("game_speed: %f\n", game.speed);
-			cloud_update(&cloud, game.speed);
+    	if(game.state==STATE_PLAY){
+			if((current_update-game.previous_update)>=1000/FPS){
+				game.previous_update = current_update;
+				
+				player_update(&player);
+				cloud_update(&cloud, game.speed);
 
-			//desenhando cenario
-			//SDL_RenderCopy(ren, scenario, NULL, &scenario_position);
-			background(&game, ren);
-			cloud_draw(&cloud, ren);
-			score(&game, ren, fnt);
-			player_draw(&player, ren);
-			SDL_RenderPresent(ren);
+				//desenhando cenario
+				background(&game, ren);
+				cloud_draw(&cloud, ren);
+				score(&game, ren, fnt);
+				player_draw(&player, ren);
+
+				if(obstacles->length==0){
+					Obstacle obs;
+					init_obstacle(&obs);
+					List_push(obstacles, obs);
+				}
+				for(int i=0; i<obstacles->length; i++){
+					Obstacle aux;
+					aux = List_search(obstacles, i);
+
+					if(aux.position.x <= -aux.width*aux.quantity){
+						List_pop(obstacles);
+					}else{
+						obstacle_update(obstacles, game.speed);
+						obstacle_draw(&aux, ren);
+					}
+				}
+				SDL_RenderPresent(ren);
+			}
 		}
     }
 
@@ -184,6 +200,9 @@ int main(int argc, char* args[]){
 	SDL_DestroyTexture(cloud_img);
 	SDL_DestroyTexture(cactus_img);
 	SDL_DestroyTexture(track_img);
+	SDL_DestroyTexture(bird);
+
+	List_free(obstacles);
 
 	SDL_DestroyTexture(txt);
 	TTF_CloseFont(fnt);
@@ -248,6 +267,8 @@ void load_textures(SDL_Renderer *ren){
 	cloud_img = IMG_LoadTexture(ren, "../assets/images/cloud.png");
 	cactus_img = IMG_LoadTexture(ren, "../assets/images/cactus.png");
 	track_img = IMG_LoadTexture(ren, "../assets/images/track.png");
+	bird = IMG_LoadTexture(ren, "../assets/images/bird.png");
+	assert(bird != NULL);
 	assert(track_img != NULL);
 	assert(cactus_img != NULL);
 	assert(cloud_img != NULL);	
@@ -396,4 +417,65 @@ void score(Game *game, SDL_Renderer *ren, TTF_Font* fnt){
 
 	SDL_Rect pos = {1050, 25, 180, 25};
 	SDL_RenderCopy(ren, txt, NULL, &pos);
+}
+
+void init_obstacle(Obstacle *obs){
+	//Obstacle obs;
+
+	srand(time(NULL));
+	int randint = rand()%4;
+	if(randint<=2){
+		obs->type = TYPE_CACTUS;
+	}else if(randint==3){
+		obs->type = TYPE_BIRD;
+	}
+
+	obs->position = (SDL_Point){SCREEN_WIDTH+10, 536};
+	obs->width = 56;//14x4
+	obs->height = 64;//16x4
+	obs->quantity = 1;
+	obs->step_index = 0;
+
+	if(obs->type==TYPE_CACTUS){
+		obs->quantity = (rand()%3)+1;
+	}
+	if(obs->type==TYPE_BIRD){
+		//groun 600
+		obs->width = 96; //64*1,5
+		obs->height = 72;//48*1,5
+		randint = rand()%2;
+		if(randint==0){
+			obs->position.y = 456;
+		}else{
+			obs->position.y = 520;
+		}
+	}
+}
+
+void obstacle_update(List *obs, float game_speed){
+	//printf("Alterando posicao\n");
+	obs->first->data.position.x -= game_speed;
+	if(obs->first->data.type == TYPE_BIRD){
+		obs->first->data.step_index += 1;
+		if(obs->first->data.step_index>=18){// o msm crop permanece a cada 3 frames
+			obs->first->data.step_index = 0;
+		}
+	}
+}
+
+void obstacle_draw(Obstacle *obs, SDL_Renderer *ren){
+	//printf("Desenhando\n");
+	SDL_Rect pos = {obs->position.x, obs->position.y, obs->width*obs->quantity, obs->height};
+	// SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
+	// SDL_RenderFillRect(ren, &pos);
+	SDL_Rect crop;
+	if(obs->type == TYPE_BIRD){
+		int aux = obs->step_index/3;
+		crop = (SDL_Rect) {aux*64, 0, 64, 48};
+		SDL_RenderCopy(ren, bird, &crop, &pos);
+	}else if(obs->type == TYPE_CACTUS){
+		int i = obs->quantity -1;
+		crop = (SDL_Rect) {0, 16*i, 14*obs->quantity, 16};
+		SDL_RenderCopy(ren, cactus_img, &crop, &pos);
+	}
 }
