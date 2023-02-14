@@ -41,6 +41,7 @@ typedef struct{
 	Uint32 previous_update;
 	float speed;
 	int x_pos_backgroung;
+	int x_pos_track;
 	int points;
 }Game;
 
@@ -178,7 +179,7 @@ int main(int argc, char* args[]){
 				game.previous_update = current_update;
 				
 				player_update(&player);
-				cloud_update(&cloud, game.speed);
+				cloud_update(&cloud, game.speed*0.5);
 
 				//desenhando cenario
 				background(&game, ren);
@@ -406,6 +407,7 @@ void init_game(Game *game){
 	game->speed = 14;
 	game->previous_update = SDL_GetTicks();
 	game->x_pos_backgroung = 0;
+	game->x_pos_track = 0;
 	game->points = 0;
 }
 
@@ -525,7 +527,7 @@ void background_draw(Game *game, SDL_Renderer *ren){
 
 void background(Game *game, SDL_Renderer *ren){
 	//SDL_RenderCopy(ren, scenario, NULL, &scenario_position);
-	game->x_pos_backgroung += game->speed;
+	game->x_pos_backgroung += game->speed*0.5;
 	if(game->x_pos_backgroung>=SCREEN_WIDTH){
 		game->x_pos_backgroung = 0;
 	}
@@ -534,7 +536,12 @@ void background(Game *game, SDL_Renderer *ren){
 	SDL_RenderCopy(ren, scenario, &crop, &pos);
 
 	//track
-	SDL_RenderCopy(ren, track_img, &crop, &pos);
+	game->x_pos_track += game->speed;
+	if(game->x_pos_track>=SCREEN_WIDTH){
+		game->x_pos_track = 0;
+	}
+	SDL_Rect crop_t = {game->x_pos_track, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+	SDL_RenderCopy(ren, track_img, &crop_t, &pos);
 }
 
 void score(Game *game, SDL_Renderer *ren, TTF_Font* fnt){
