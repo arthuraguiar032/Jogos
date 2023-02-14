@@ -13,23 +13,26 @@
 #define TIMEOUT 10
 #define FPS 30
 #define JUMP_VEL 8.5
+#define TIME_ON_DEAD 1500
 
 /*Compilação:
 gcc main.c ../headers/list.c -g -lSDL2 -lSDL2_image -lSDL2_ttf -o main
+gcc main2.c -g -lSDL2 -lSDL2_image -lSDL2_ttf -o main2
 */
 
 //States Machine
 typedef enum{
 	STATE_MAIN_MENU,
-	STATE_INSTRUCTIONS,
 	STATE_PLAY,
-	STATE_PAUSE
+	STATE_PAUSE,
+	STATE_GAME_OVER
 }Game_State;
 
 typedef enum{
 	STATE_STANDING,
 	STATE_DUCKING,
-	STATE_JUMPING
+	STATE_JUMPING,
+	STATE_DEAD
 }Player_State;
 
 //Control structures 
@@ -77,6 +80,7 @@ TTF_Font* aux_OpenFont();
 void init_game(Game *game);
 void load_textures(SDL_Renderer *ren);
 void background(Game *game, SDL_Renderer *ren);
+void background_draw(Game *game, SDL_Renderer *ren);
 void score(Game *game, SDL_Renderer *ren, TTF_Font* fnt);
 
 //player functions
@@ -121,6 +125,7 @@ int main(int argc, char* args[]){
 
     //variaveis de controle
     bool quit = false;
+    Uint32 time_dead = 0;
     Uint32 tempo_espera = TIMEOUT;
 	
 	SDL_Rect scenario_position = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
@@ -160,7 +165,7 @@ int main(int argc, char* args[]){
     	Uint32 current_update = SDL_GetTicks();
 
     	if(game.state==STATE_PLAY){
-			if((current_update-game.previous_update)>=1000/FPS){
+			if((current_update-game.previous_update)>=1000/FPS && player.state!=STATE_DEAD){
 				game.previous_update = current_update;
 				
 				player_update(&player);
@@ -187,6 +192,31 @@ int main(int argc, char* args[]){
 						obstacle_update(obstacles, game.speed);
 						obstacle_draw(&aux, ren);
 					}
+
+					int aux_height = 128;
+					if(player.state == STATE_DUCKING){
+						aux_height = 64;
+					} 
+
+					SDL_Rect playerpos = {player.position.x, player.position.y, player.size, aux_height};
+					SDL_Rect auxpos = {aux.position.x, aux.position.y, aux.width*aux.quantity-10, aux.height};
+					if(SDL_HasIntersection(&playerpos, &auxpos)==SDL_TRUE){
+						player.state = STATE_DEAD;
+						time_dead = SDL_GetTicks();
+					}
+				}
+				SDL_RenderPresent(ren);
+			}
+
+			if(player.state == STATE_DEAD){
+				Uint32 now = SDL_GetTicks();
+				background_draw(&game, ren);
+				cloud_draw(&cloud, ren);
+				Obstacle aux = obstacles->first->data;
+				obstacle_draw(&aux, ren);
+				player_draw(&player, ren);
+				if(now-time_dead>=TIME_ON_DEAD){
+					game.state = STATE_GAME_OVER;
 				}
 				SDL_RenderPresent(ren);
 			}
@@ -285,6 +315,12 @@ void init_game(Game *game){
 	game->points = 0;
 }
 
+void game_update(){}
+
+void game_over(){}
+
+void main_menu(){}
+
 void init_player(Player *player){
 	player->state = STATE_STANDING;
 	player->position.x = 50;
@@ -352,11 +388,17 @@ void player_update(Player *player){
 
 void player_draw(Player *player, SDL_Renderer *ren){
 	SDL_Rect position, crop;
+	position = (SDL_Rect){player->position.x, player->position.y, player->size, player->size};
+	if(player->state == STATE_DEAD){
+		SDL_RenderCopy(ren, dino_dead, NULL, &position);
+
+		return;
+	}
+
 	if(player->state == STATE_DUCKING){
 		position = (SDL_Rect){player->position.x, player->position.y, player->size, player->size/2};
 		crop = player->sprites[1][player->step_index];
 	}else{
-		position = (SDL_Rect){player->position.x, player->position.y, player->size, player->size};
 		crop = player->sprites[0][player->step_index];
 	}
 	SDL_RenderCopy(ren, dino_running, &crop, &position);
@@ -382,6 +424,15 @@ void cloud_update(Cloud *cloud, float game_speed){
 void cloud_draw(Cloud *cloud, SDL_Renderer *ren){
 	SDL_Rect pos = {cloud->position.x, cloud->position.y, cloud->width, cloud->height};
 	SDL_RenderCopy(ren, cloud_img, NULL, &pos);
+}
+
+void background_draw(Game *game, SDL_Renderer *ren){
+	SDL_Rect pos = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+	SDL_Rect crop = {game->x_pos_backgroung, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+	SDL_RenderCopy(ren, scenario, &crop, &pos);
+
+	//track
+	SDL_RenderCopy(ren, track_img, &crop, &pos);
 }
 
 void background(Game *game, SDL_Renderer *ren){
